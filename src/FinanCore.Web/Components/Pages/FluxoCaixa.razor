@@ -1,0 +1,135 @@
+@page "/fluxo-de-caixa"
+@rendermode InteractiveServer
+@inject MovimentacaoService Service
+@inject AuthService Auth
+
+<PageTitle>Fluxo de Caixa | FinanCore</PageTitle>
+
+<section class="module-page">
+    <div class="module-heading">
+        <div>
+            <span class="dashboard-eyebrow">Financeiro</span>
+            <h1>Fluxo de Caixa</h1>
+            <p>Acompanhe as entradas, saídas e o saldo do período selecionado.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="module-message module-message-error" role="alert">@message</div>
+    }
+
+    <div class="module-card">
+        <div class="module-toolbar">
+            <strong>Período</strong>
+        </div>
+        <div class="account-filters">
+            <input type="date" @bind="filterInicio" />
+            <input type="date" @bind="filterFim" />
+            <button type="button" class="category-action-button" @onclick="Carregar" disabled="@(!pageReady)">Filtrar</button>
+        </div>
+    </div>
+
+    <div class="metric-grid">
+        <article class="metric-card metric-card-primary">
+            <div class="metric-topline"><span>Saldo Inicial</span><span class="metric-icon">◈</span></div>
+            <strong>@Money(fluxo.SaldoInicial)</strong>
+            <small class="metric-positive">Saldo acumulado <span>antes do período</span></small>
+        </article>
+        <article class="metric-card">
+            <div class="metric-topline"><span>Entradas</span><span class="metric-icon metric-icon-green">↗</span></div>
+            <strong>@Money(fluxo.TotalEntradas)</strong>
+            <small class="metric-positive">Total recebido <span>no período</span></small>
+        </article>
+        <article class="metric-card">
+            <div class="metric-topline"><span>Saídas</span><span class="metric-icon metric-icon-red">↘</span></div>
+            <strong>@Money(fluxo.TotalSaidas)</strong>
+            <small class="metric-negative">Total pago <span>no período</span></small>
+        </article>
+        <article class="metric-card">
+            <div class="metric-topline"><span>Saldo do Período</span><span class="metric-icon metric-icon-gold">✦</span></div>
+            <strong>@Money(fluxo.SaldoPeriodo)</strong>
+            <small class="metric-positive">Saldo final <span>@Money(fluxo.SaldoFinal)</span></small>
+        </article>
+    </div>
+
+    <div class="module-card">
+        <div class="module-toolbar">
+            <strong>Movimentações do período</strong>
+            <span>@fluxo.Movimentacoes.Count registro(s)</span>
+        </div>
+        <div class="category-table-wrap">
+            <table class="category-table">
+                <thead>
+                    <tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th></tr>
+                </thead>
+                <tbody>
+                    @if (!pageReady)
+                    {
+                        <tr><td colspan="5" class="category-empty">Carregando fluxo de caixa...</td></tr>
+                    }
+                    else if (fluxo.Movimentacoes.Count == 0)
+                    {
+                        <tr><td colspan="5" class="category-empty">Nenhuma movimentação encontrada no período.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in fluxo.Movimentacoes)
+                        {
+                            <tr>
+                                <td>@item.DataMovimentacao.ToString("dd/MM/yyyy")</td>
+                                <td>@item.Descricao</td>
+                                <td>@item.CategoriaNome</td>
+                                <td><span class="category-type @(item.Tipo == "Entrada" ? "category-type-income" : "category-type-expense")">@(item.Tipo == "Entrada" ? "ENTRADA" : "SAÍDA")</span></td>
+                                <td>@Money(item.Valor)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@code
+{
+    private FluxoCaixaResponse fluxo = new(0m, 0m, 0m, 0m, 0m, []);
+    private string? message;
+    private bool pageReady;
+
+    private DateTime filterInicio = new(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private DateTime filterFim = DateTime.Now.Date;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+
+        await Carregar();
+        pageReady = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Carregar()
+    {
+        if (filterInicio.Date > filterFim.Date)
+        {
+            message = "A data inicial não pode ser maior que a data final.";
+            return;
+        }
+
+        try
+        {
+            fluxo = await Service.ObterFluxoCaixaAsync(filterInicio, filterFim) ?? fluxo;
+            message = null;
+        }
+        catch (HttpRequestException)
+        {
+            message = "Não foi possível carregar o fluxo de caixa.";
+        }
+    }
+
+    private static string Money(decimal valor) => valor.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+}

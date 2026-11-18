@@ -1,0 +1,129 @@
+@page "/movimentacoes"
+@rendermode InteractiveServer
+@inject MovimentacaoService Service
+@inject CategoriaService Categorias
+@inject AuthService Auth
+
+<PageTitle>Movimentações | FinanCore</PageTitle>
+
+<section class="module-page">
+    <div class="module-heading">
+        <div>
+            <span class="dashboard-eyebrow">Financeiro</span>
+            <h1>Movimentações Financeiras</h1>
+            <p>Consulte as movimentações geradas por recebimentos e pagamentos.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="module-message module-message-error" role="alert">@message</div>
+    }
+
+    <div class="module-card">
+        <div class="module-toolbar">
+            <strong>Movimentações</strong>
+            <span>@items.Count registro(s)</span>
+        </div>
+        <div class="account-filters">
+            <input type="date" @bind="filterInicio" />
+            <input type="date" @bind="filterFim" />
+            <select @bind="filterTipo">
+                <option value="">Todos os tipos</option>
+                <option value="Entrada">Entrada</option>
+                <option value="Saida">Saída</option>
+            </select>
+            <select @bind="filterCategoriaId">
+                <option value="">Todas as categorias</option>
+                @foreach (var categoria in categorias)
+                {
+                    <option value="@categoria.Id">@categoria.Nome</option>
+                }
+            </select>
+            <button type="button" class="category-action-button" @onclick="Carregar" disabled="@(!pageReady)">Filtrar</button>
+        </div>
+        <div class="category-table-wrap">
+            <table class="category-table">
+                <thead>
+                    <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Categoria</th><th>Origem</th><th>Descrição</th></tr>
+                </thead>
+                <tbody>
+                    @if (!pageReady)
+                    {
+                        <tr><td colspan="6" class="category-empty">Carregando movimentações...</td></tr>
+                    }
+                    else if (items.Count == 0)
+                    {
+                        <tr><td colspan="6" class="category-empty">Nenhuma movimentação encontrada.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td>@item.DataMovimentacao.ToString("dd/MM/yyyy")</td>
+                                <td><span class="category-type @(item.Tipo == "Entrada" ? "category-type-income" : "category-type-expense")">@(item.Tipo == "Entrada" ? "ENTRADA" : "SAÍDA")</span></td>
+                                <td>@Money(item.Valor)</td>
+                                <td>@item.CategoriaNome</td>
+                                <td>@(item.Origem == "ContaReceber" ? "Conta a Receber" : "Conta a Pagar")</td>
+                                <td>@item.Descricao</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@code
+{
+    private List<MovimentacaoResponse> items = [];
+    private List<CategoriaResponse> categorias = [];
+    private string? message;
+    private bool pageReady;
+
+    private DateTime? filterInicio;
+    private DateTime? filterFim;
+    private string filterTipo = "";
+    private string filterCategoriaId = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+
+        try
+        {
+            categorias = (await Categorias.ListarAsync()).ToList();
+            await Carregar();
+        }
+        catch (HttpRequestException)
+        {
+            message = "Não foi possível carregar as movimentações.";
+        }
+        finally
+        {
+            pageReady = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Carregar()
+    {
+        try
+        {
+            var categoriaId = Guid.TryParse(filterCategoriaId, out var id) ? id : (Guid?)null;
+            items = (await Service.ListarAsync(filterInicio, filterFim, filterTipo, categoriaId)).ToList();
+            message = null;
+        }
+        catch (HttpRequestException)
+        {
+            message = "Não foi possível carregar as movimentações.";
+        }
+    }
+
+    private static string Money(decimal valor) => valor.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+}
