@@ -1,0 +1,44 @@
+# Build
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# VS Code
+.vscode/
+
+# Configurações locais
+appsettings.Development.json
+
+# Logs
+*.log
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+
+# Certificados e chaves privadas
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+
+# Bancos de dados locais
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups / dumps
+*.bak
+*.dump
+
+# Testes / cobertura
+TestResults/
+coverage/
+*.coverage
+# Documentação local
+README.md
