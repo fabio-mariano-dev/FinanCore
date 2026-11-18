@@ -1,0 +1,48 @@
+﻿@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<div class="app-shell">
+    <aside class="app-sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="app-main">
+        <header class="app-header">
+            <div class="header-context">
+                <span class="header-eyebrow">Visão geral</span>
+                <span class="header-title">FinanCore</span>
+            </div>
+            <div class="header-status">
+                <span class="status-dot" aria-hidden="true"></span>
+                Ambiente seguro
+            </div>
+        </header>
+
+        <article class="app-content">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool authenticationChecked;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || authenticationChecked)
+            return;
+
+        await Auth.RestoreAsync();
+        authenticationChecked = true;
+
+        if (Auth.Usuario is null || string.IsNullOrWhiteSpace(Auth.AccessToken))
+            Navigation.NavigateTo("/login");
+    }
+}

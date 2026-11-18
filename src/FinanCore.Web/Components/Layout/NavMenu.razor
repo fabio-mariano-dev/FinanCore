@@ -1,0 +1,73 @@
+﻿@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<div class="brand-block">
+    <a class="brand-link" href="/">
+        <span class="brand-mark" aria-hidden="true">F</span>
+        <span>
+            <strong>FinanCore</strong>
+            <small>Gestão financeira</small>
+        </span>
+    </a>
+</div>
+
+<nav class="app-nav" aria-label="Navegação principal">
+    <span class="nav-label">Principal</span>
+    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+        <span class="nav-icon" aria-hidden="true">⌂</span> Dashboard
+    </NavLink>
+    <NavLink class="nav-link" href="/categorias">
+        <span class="nav-icon" aria-hidden="true">◆</span> Categorias
+    </NavLink>
+    <NavLink class="nav-link" href="/clientes">
+        <span class="nav-icon" aria-hidden="true">♙</span> Clientes
+    </NavLink>
+    <NavLink class="nav-link" href="/fornecedores">
+        <span class="nav-icon" aria-hidden="true">◆</span> Fornecedores
+    </NavLink>
+
+    <span class="nav-label nav-label-spaced">Gestão</span>
+    <NavLink class="nav-link" href="/contas-pagar">
+        <span class="nav-icon" aria-hidden="true">↗</span> Contas a Pagar
+    </NavLink>
+    <NavLink class="nav-link" href="/contas-receber">
+        <span class="nav-icon" aria-hidden="true">↙</span> Contas a Receber
+    </NavLink>
+    <NavLink class="nav-link" href="/movimentacoes">
+        <span class="nav-icon" aria-hidden="true">↔</span> Movimentações
+    </NavLink>
+    <NavLink class="nav-link" href="/fluxo-de-caixa">
+        <span class="nav-icon" aria-hidden="true">≈</span> Fluxo de Caixa
+    </NavLink>
+    <button class="nav-link nav-link-future" type="button" disabled>
+        <span class="nav-icon" aria-hidden="true">▤</span> Relatórios
+    </button>
+    <button class="nav-link nav-link-future" type="button" disabled>
+        <span class="nav-icon" aria-hidden="true">⚙</span> Configurações
+    </button>
+</nav>
+
+<div class="sidebar-account">
+    @if (Auth.Usuario is not null)
+    {
+        <div class="account-summary">
+            <span class="account-avatar">@Auth.Usuario.Nome[..1].ToUpperInvariant()</span>
+            <span class="account-copy">
+                <strong>@Auth.Usuario.Nome</strong>
+                <small>@Auth.Usuario.Perfil</small>
+            </span>
+        </div>
+    }
+    <button class="logout-button" type="button" @onclick="SairAsync">
+        <span aria-hidden="true">↪</span> Sair
+    </button>
+</div>
+
+@code {
+    private async Task SairAsync()
+    {
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+}
+
