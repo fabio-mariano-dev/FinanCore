@@ -1,0 +1,190 @@
+@page "/contas-receber"
+@rendermode InteractiveServer
+@inject ContaReceberService Service
+@inject ClienteService Clientes
+@inject CategoriaService Categorias
+@inject AuthService Auth
+
+<PageTitle>Contas a Receber | FinanCore</PageTitle>
+
+<section class="module-page">
+    <div class="module-heading">
+        <div>
+            <span class="dashboard-eyebrow">Financeiro</span>
+            <h1>Contas a Receber</h1>
+            <p>Controle valores previstos e recebimentos.</p>
+            </div>
+            <button class="module-primary-button" @onclick="Novo" disabled="@(!pageReady)">+ Nova conta</button>
+            </div>
+
+@if(!string.IsNullOrWhiteSpace(message))
+{
+    <div class="module-message @(error?"module-message-error":"module-message-success")">@message</div>
+}
+
+<div class="module-card"><div class="module-toolbar"><strong>Contas a receber</strong><span>@items.Count registro(s)</span></div><div class="account-filters"><select @bind="filterStatus"><option value="">Todos os status</option><option>Pendente</option><option>Pago</option><option>Vencido</option><option>Cancelado</option></select><select @bind="filterClient"><option value="">Todos os clientes</option>@foreach(var x in clients){<option value="@x.Id">@x.Nome</option>}</select><input type="date" @bind="filterFrom" /><input type="date" @bind="filterTo" /><button class="category-action-button" @onclick="Carregar">Filtrar</button></div><div class="category-table-wrap"><table class="category-table"><thead><tr><th>Cliente</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead><tbody>@if(!pageReady){<tr><td colspan="7" class="category-empty">Carregando contas a receber...</td></tr>}else if(items.Count==0){<tr><td colspan="7" class="category-empty">Nenhuma conta encontrada.</td></tr>}else{@foreach(var item in items){<tr><td>@NameClient(item.ClienteId)</td><td>@NameCategory(item.CategoriaId)</td><td><strong>@item.Descricao</strong></td><td>@Money(item.Valor)</td><td>@item.DataVencimento.ToString("dd/MM/yyyy")</td><td><span class="category-status @(item.Status=="Pago"?"category-status-active":item.Status=="Cancelado"?"category-status-inactive":"category-type-income")">@item.Status</span></td><td class="category-actions">@if(item.Status=="Pendente"||item.Status=="Vencido"){<button class="category-action-button" @onclick="()=>Quitar(item)">Quitar</button><button class="category-action-button category-action-danger" @onclick="()=>Cancelar(item)">Cancelar</button><button class="category-action-button" @onclick="()=>Editar(item)">Editar</button>}</td></tr>}}</tbody></table></div></div></section>
+@if(show){<div class="category-modal-backdrop"><section class="category-modal" aria-labelledby="receber-title"><div class="category-modal-heading"><div><span class="dashboard-eyebrow">Cadastro</span><h2 id="receber-title">@(editId.HasValue?"Editar conta":"Nova conta a receber")</h2></div><button class="category-close-button" @onclick="Fechar">×</button></div><EditForm Model="form" OnValidSubmit="Salvar"><DataAnnotationsValidator /><div class="client-form-grid"><div class="category-field"><label>Cliente</label><InputSelect @bind-Value="form.ClienteId"><option value="@Guid.Empty">Selecione</option>@foreach(var x in clients){<option value="@x.Id">@x.Nome</option>}</InputSelect></div><div class="category-field"><label>Categoria</label><InputSelect @bind-Value="form.CategoriaId"><option value="@Guid.Empty">Selecione</option>@foreach(var x in categories){<option value="@x.Id">@x.Nome</option>}</InputSelect></div><div class="category-field client-field-wide"><label>Descrição</label><InputText @bind-Value="form.Descricao" /></div><div class="category-field"><label>Valor</label><InputNumber @bind-Value="form.Valor" /></div><div class="category-field"><label>Emissão</label><InputDate @bind-Value="form.DataEmissao" /></div><div class="category-field"><label>Vencimento</label><InputDate @bind-Value="form.DataVencimento" /></div><div class="category-field client-field-wide"><label>Observações</label><InputTextArea @bind-Value="form.Observacoes" /></div></div><ValidationMessage For="@(()=>form.Descricao)" />@if(!string.IsNullOrWhiteSpace(formError)){<div class="module-message module-message-error">@formError</div>}<div class="category-form-actions"><button type="button" class="category-cancel-button" @onclick="Fechar">Cancelar</button><button class="module-primary-button">Salvar</button></div></EditForm></section></div>}
+
+@code 
+{
+    
+    private List<ContaReceberResponse> items=[]; 
+    private List<ClienteResponse> clients=[]; 
+    private List<CategoriaResponse> categories=[]; 
+    
+    private string? message,formError; 
+    private bool error,show,pageReady; 
+    
+    private Guid? editId; 
+    
+    private string filterStatus="",filterClient=""; 
+   
+    private DateTime? filterFrom,filterTo; 
+   
+    private Form form=new(); 
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+
+        try
+        {
+            clients=(await Clientes.ListarAsync()).Where(x=>x.Ativo).ToList();
+            categories=(await Categorias.ListarAsync()).Where(x=>x.Ativo&&x.Tipo==CategoriaTipo.Receita).ToList();
+            await Carregar();
+        }
+        catch (HttpRequestException)
+        {
+            message = "Não foi possível carregar as contas a receber.";
+            error = true;
+        }
+        finally
+        {
+            pageReady = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    } 
+    private async Task Carregar()
+    {
+        items=
+         (await Service.ListarAsync
+            (filterStatus,Guid.TryParse(filterClient,out var id) ? id : null, filterFrom, filterTo))?.ToList()??[];
+    } 
+
+    private void Novo()
+    {
+        editId=null;
+        form=new()
+        {
+            DataEmissao=DateTime.Today,
+            DataVencimento=DateTime.Today
+        };
+        show=true;
+    } 
+    
+    private void Editar(ContaReceberResponse x)
+    {
+        editId=x.Id;
+        form=new()
+        {
+            ClienteId=x.ClienteId,
+            CategoriaId=x.CategoriaId,
+            Descricao=x.Descricao,
+            Valor=x.Valor,
+            DataEmissao=x.DataEmissao,
+            DataVencimento=x.DataVencimento,
+            Observacoes=x.Observacoes
+        };
+        show=true;
+    } 
+    private void Fechar()=>show=false; 
+    private async Task Salvar()
+    {
+        try
+        {
+            var r=new 
+            ContaReceberRequest(form.ClienteId, form.CategoriaId, form.Descricao, form.Valor, form.DataEmissao, form.DataVencimento, form.Observacoes);
+            
+            if(editId.HasValue)
+                await Service.AtualizarAsync(editId.Value,r);
+            else 
+                await Service.CriarAsync(r);
+                
+            show=false;
+            
+            await Carregar();
+            
+            message="Conta salva com sucesso."; error=false;
+        }
+        catch
+        {
+            formError="Não foi possível salvar a conta.";
+        }
+    } 
+
+    private async Task Quitar(ContaReceberResponse x)
+    {
+        try
+        {
+            await Service.QuitarAsync(x.Id,DateTime.Now);
+            
+            await Carregar();
+            
+            message="Conta quitada com sucesso.";
+            
+            error=false;
+        }
+        catch
+        {
+            message="Não foi possível quitar a conta.";
+            error=true;
+        }
+    } 
+    
+    private async Task Cancelar(ContaReceberResponse x)
+    {
+        try
+        {
+            await Service.CancelarAsync(x.Id);
+            
+            await Carregar();
+        }
+        
+        catch
+        {
+            message="Não foi possível cancelar a conta.";
+            
+            error=true;
+        }
+    } 
+    
+    private string NameClient(Guid id)=>clients.FirstOrDefault(x=>x.Id==id)?.Nome??"-";
+    
+    private string NameCategory(Guid id)=>categories.FirstOrDefault(x=>x.Id==id)?.Nome??"-";
+    
+    private static string Money(decimal x)=>x.ToString("C",System.Globalization.CultureInfo.GetCultureInfo("pt-BR")); 
+    
+    private sealed class Form
+    {
+        [Required]
+        public Guid ClienteId{get;set;} 
+        
+        [Required]
+        public Guid CategoriaId { get;set; }
+        
+        [Required]
+        public string Descricao { get;set; }="";
+
+        [Range(0.01,double.MaxValue)]
+        public decimal Valor{get;set;}public 
+        
+        DateTime DataEmissao{get;set;}
+        
+        public DateTime DataVencimento{get;set;}
+        
+        public string? Observacoes{get;set;}
+    }
+}
+
