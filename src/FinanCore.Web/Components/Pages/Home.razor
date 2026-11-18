@@ -1,0 +1,189 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject DashboardService DashboardService
+
+<PageTitle>Dashboard | FinanCore</PageTitle>
+
+<section class="dashboard-page">
+	<div class="dashboard-heading">
+		<div>
+			<span class="dashboard-eyebrow">Resumo financeiro</span>
+			<h1>Dashboard</h1>
+			<p>Bom dia@(Auth.Usuario is null ? string.Empty : $", {Auth.Usuario.Nome.Split(' ')[0]}"). Aqui está o panorama da sua operação.</p>
+		</div>
+	</div>
+
+	@if (!string.IsNullOrWhiteSpace(message))
+	{
+		<div class="module-message module-message-error" role="alert">@message</div>
+	}
+
+	<div class="module-card">
+		<div class="module-toolbar">
+			<strong>Período</strong>
+		</div>
+		<div class="account-filters">
+			<input type="date" @bind="filterInicio" />
+			<input type="date" @bind="filterFim" />
+			<button type="button" class="category-action-button" @onclick="Carregar" disabled="@(!pageReady)">Filtrar</button>
+		</div>
+	</div>
+
+	<div class="metric-grid">
+		<article class="metric-card metric-card-primary">
+			<div class="metric-topline"><span>Saldo Atual</span><span class="metric-icon">◈</span></div>
+			<strong>@Currency(dashboard.SaldoAtual)</strong>
+			<small class="metric-positive">Saldo acumulado <span>nas movimentações</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Total a Pagar</span><span class="metric-icon metric-icon-red">↘</span></div>
+			<strong>@Money(dashboard.TotalAPagar)</strong>
+			<small class="metric-negative">Contas pendentes <span>e vencidas</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Total a Receber</span><span class="metric-icon metric-icon-green">↗</span></div>
+			<strong>@Money(dashboard.TotalAReceber)</strong>
+			<small class="metric-positive">Contas pendentes <span>e vencidas</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Resultado do Período</span><span class="metric-icon metric-icon-gold">✦</span></div>
+			<strong>@Currency(dashboard.ResultadoPeriodo)</strong>
+			<small class="metric-positive">Entradas menos saídas <span>no período</span></small>
+		</article>
+
+		<article class="metric-card">
+			<div class="metric-topline"><span>Entradas no Período</span><span class="metric-icon metric-icon-green">↗</span></div>
+			<strong>@Money(dashboard.EntradasPeriodo)</strong>
+			<small class="metric-positive">Recebido <span>no período</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Saídas no Período</span><span class="metric-icon metric-icon-red">↘</span></div>
+			<strong>@Money(dashboard.SaidasPeriodo)</strong>
+			<small class="metric-negative">Pago <span>no período</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Contas a Pagar Vencidas</span><span class="metric-icon metric-icon-red">!</span></div>
+			<strong>@dashboard.ContasPagarVencidas</strong>
+			<small class="metric-negative">Vencimento <span>já ultrapassado</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Contas a Receber Vencidas</span><span class="metric-icon metric-icon-red">!</span></div>
+			<strong>@dashboard.ContasReceberVencidas</strong>
+			<small class="metric-negative">Vencimento <span>já ultrapassado</span></small>
+		</article>
+
+		<article class="metric-card">
+			<div class="metric-topline"><span>Contas a Pagar no Período</span><span class="metric-icon">◈</span></div>
+			<strong>@dashboard.QuantidadeContasPagarPeriodo</strong>
+			<small class="metric-positive">Vencimento <span>dentro do período</span></small>
+		</article>
+		<article class="metric-card">
+			<div class="metric-topline"><span>Contas a Receber no Período</span><span class="metric-icon">◈</span></div>
+			<strong>@dashboard.QuantidadeContasReceberPeriodo</strong>
+			<small class="metric-positive">Vencimento <span>dentro do período</span></small>
+		</article>
+	</div>
+
+	<div class="dashboard-grid">
+		<section class="dashboard-card cashflow-card">
+			<div class="card-heading">
+				<div><h2>Receitas x Despesas</h2><p>Movimentação dos seis meses até o fim do período</p></div>
+				<span class="card-more" aria-hidden="true">•••</span>
+			</div>
+			<div class="chart-legend"><span><i class="legend-income"></i>Receitas</span><span><i class="legend-expense"></i>Despesas</span></div>
+			<div class="bar-chart" aria-label="Gráfico de receitas e despesas">
+				@foreach (var month in chartMonths)
+				{
+					<div class="chart-column">
+						<div class="bar-pair"><span class="chart-bar income-bar" style="height: @month.IncomeHeight%"></span><span class="chart-bar expense-bar" style="height: @month.ExpenseHeight%"></span></div>
+						<small>@month.Label</small>
+					</div>
+				}
+			</div>
+		</section>
+
+		<section class="dashboard-card activity-card">
+			<div class="card-heading"><div><h2>Movimentações recentes</h2><p>Últimos lançamentos registrados</p></div><span class="card-more" aria-hidden="true">•••</span></div>
+			<div class="activity-list">
+				@foreach (var movement in recentMovements)
+				{
+					<div class="activity-row"><span class="activity-badge @movement.Tone">@movement.Symbol</span><span class="activity-description"><strong>@movement.Description</strong><small>@movement.Data.ToString("dd MMM, HH:mm", ptBr)</small></span><strong class="activity-value @movement.Tone">@Currency(movement.Valor, movement.IsIncome)</strong></div>
+				}
+			</div>
+		</section>
+	</div>
+</section>
+
+@code {
+	private readonly CultureInfo ptBr = CultureInfo.GetCultureInfo("pt-BR");
+	private DashboardResponse dashboard = new(0m, 0m, 0m, 0m, 0m, 0m, 0, 0, 0, 0, DateTime.Today, DateTime.Today, [], []);
+	private string? message;
+	private bool pageReady;
+
+	private DateTime filterInicio = new(DateTime.Now.Year, DateTime.Now.Month, 1);
+	private DateTime filterFim = DateTime.Now.Date;
+
+	private IReadOnlyList<ChartMonth> chartMonths =>
+		dashboard.Grafico.Select(month => new ChartMonth(
+			month.Mes,
+			Height(month.Receitas),
+			Height(month.Despesas))).ToList();
+
+	private IReadOnlyList<RecentMovement> recentMovements => dashboard.MovimentacoesRecentes
+		.Select(movement => new RecentMovement(
+			movement.Descricao,
+			movement.Data,
+			movement.Valor,
+			movement.Tipo == "Entrada" ? "positive" : "negative",
+			movement.Tipo == "Entrada" ? "↑" : "↓",
+			movement.Tipo == "Entrada"))
+		.ToList();
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender) return;
+
+		await Auth.RestoreAsync();
+		if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+
+		await Carregar();
+		pageReady = true;
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private async Task Carregar()
+	{
+		if (filterInicio.Date > filterFim.Date)
+		{
+			message = "A data inicial não pode ser maior que a data final.";
+			return;
+		}
+
+		try
+		{
+			dashboard = await DashboardService.ObterAsync(filterInicio, filterFim) ?? dashboard;
+			message = null;
+		}
+		catch (HttpRequestException)
+		{
+			message = "Não foi possível carregar o dashboard.";
+		}
+
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private int Height(decimal value)
+	{
+		var maximum = dashboard.Grafico.SelectMany(month => new[] { month.Receitas, month.Despesas }).DefaultIfEmpty().Max();
+		return maximum <= 0 ? 0 : Math.Max(4, (int)Math.Round(value / maximum * 100));
+	}
+
+	private string Currency(decimal value, bool positive = true)
+		=> $"{(positive ? "+ " : "- ")}{value.ToString("C", ptBr)}".Replace("+ R$ 0,00", "R$ 0,00").Replace("- R$ 0,00", "R$ 0,00");
+
+	private static string Money(decimal value) => value.ToString("C", CultureInfo.GetCultureInfo("pt-BR"));
+
+	private sealed record ChartMonth(string Label, int IncomeHeight, int ExpenseHeight);
+	private sealed record RecentMovement(string Description, DateTime Data, decimal Valor, string Tone, string Symbol, bool IsIncome);
+}

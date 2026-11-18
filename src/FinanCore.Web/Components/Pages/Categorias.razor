@@ -1,0 +1,187 @@
+@page "/categorias"
+@rendermode InteractiveServer
+@inject CategoriaService CategoriaService
+@inject AuthService Auth
+
+<PageTitle>Categorias | FinanCore</PageTitle>
+
+<section class="module-page categories-page">
+    <div class="module-heading">
+        <div>
+            <span class="dashboard-eyebrow">Cadastros</span>
+            <h1>Categorias</h1>
+            <p>Organize receitas e despesas da sua operação.</p>
+        </div>
+        <button class="module-primary-button" type="button" @onclick="AbrirNova" disabled="@isLoading">+ Nova categoria</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="module-message @(messageIsError ? "module-message-error" : "module-message-success")" role="alert">@message</div>
+    }
+
+    <div class="module-card">
+        <div class="module-toolbar">
+            <strong>Categorias cadastradas</strong>
+            <span>@categorias.Count categoria(s)</span>
+        </div>
+        <div class="category-table-wrap">
+            <table class="category-table">
+                <thead>
+                    <tr><th>Nome</th><th>Tipo</th><th>Status</th><th class="category-actions-heading">Ações</th></tr>
+                </thead>
+                <tbody>
+                    @if (isLoading)
+                    {
+                        <tr><td colspan="4" class="category-empty">Carregando categorias...</td></tr>
+                    }
+                    else if (categorias.Count == 0)
+                    {
+                        <tr><td colspan="4" class="category-empty">Nenhuma categoria cadastrada.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var categoria in categorias)
+                        {
+                            <tr>
+                                <td><strong>@categoria.Nome</strong></td>
+                                <td><span class="category-type @TipoClasse(categoria.Tipo)">@TipoTexto(categoria.Tipo)</span></td>
+                                <td><span class="category-status @(categoria.Ativo ? "category-status-active" : "category-status-inactive")">@(categoria.Ativo ? "Ativo" : "Inativo")</span></td>
+                                <td class="category-actions">
+                                    <button type="button" class="category-action-button" @onclick="() => Editar(categoria)">Editar</button>
+                                    @if (categoria.Ativo)
+                                    {
+                                        <button type="button" class="category-action-button category-action-danger" @onclick="() => AlterarStatusAsync(categoria)">Inativar</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="category-action-button category-action-positive" @onclick="() => AlterarStatusAsync(categoria)">Ativar</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@if (showForm)
+{
+    <div class="category-modal-backdrop">
+        <section class="category-modal" aria-labelledby="category-form-title">
+            <div class="category-modal-heading">
+                <div><span class="dashboard-eyebrow">Cadastro</span><h2 id="category-form-title">@(editingId.HasValue ? "Editar categoria" : "Nova categoria")</h2></div>
+                <button type="button" class="category-close-button" @onclick="FecharForm" aria-label="Fechar">×</button>
+            </div>
+            <EditForm Model="form" OnValidSubmit="SalvarAsync" class="category-form">
+                <DataAnnotationsValidator />
+                <div class="category-field"><label for="category-name">Nome</label><InputText id="category-name" @bind-Value="form.Nome" maxlength="100" placeholder="Ex.: Vendas" /><ValidationMessage For="@(() => form.Nome)" /></div>
+                <div class="category-field"><label for="category-type">Tipo</label><InputSelect id="category-type" @bind-Value="form.Tipo"><option value="@CategoriaTipo.Receita">Receita</option><option value="@CategoriaTipo.Despesa">Despesa</option></InputSelect></div>
+                @if (!string.IsNullOrWhiteSpace(formError)) { <div class="module-message module-message-error">@formError</div> }
+                <div class="category-form-actions"><button type="button" class="category-cancel-button" @onclick="FecharForm">Cancelar</button><button type="submit" class="module-primary-button" disabled="@isSaving">@(isSaving ? "Salvando..." : "Salvar categoria")</button></div>
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly List<CategoriaResponse> categorias = [];
+    private readonly CategoriaForm form = new();
+    private Guid? editingId;
+    private bool showForm;
+    private bool isLoading;
+    private bool isSaving;
+    private bool messageIsError;
+    private string? message;
+    private string? formError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        isLoading = true;
+        try
+        {
+            categorias.Clear();
+            categorias.AddRange(await CategoriaService.ListarAsync());
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível carregar as categorias.", true);
+        }
+        finally { isLoading = false; }
+    }
+
+    private void AbrirNova()
+    {
+        editingId = null;
+        form.Nome = string.Empty;
+        form.Tipo = CategoriaTipo.Receita;
+        formError = null;
+        showForm = true;
+    }
+
+    private void Editar(CategoriaResponse categoria)
+    {
+        editingId = categoria.Id;
+        form.Nome = categoria.Nome;
+        form.Tipo = categoria.Tipo;
+        formError = null;
+        showForm = true;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (isSaving) return;
+        isSaving = true;
+        formError = null;
+        try
+        {
+            var request = new CategoriaRequest(form.Nome.Trim(), form.Tipo);
+            if (editingId.HasValue) await CategoriaService.AtualizarAsync(editingId.Value, request);
+            else await CategoriaService.CriarAsync(request);
+            showForm = false;
+            MostrarMensagem("Categoria salva com sucesso.", false);
+            await CarregarAsync();
+        }
+        catch (HttpRequestException)
+        {
+            formError = "Não foi possível salvar. Verifique se já existe uma categoria com o mesmo nome e tipo.";
+        }
+        finally { isSaving = false; }
+    }
+
+    private async Task AlterarStatusAsync(CategoriaResponse categoria)
+    {
+        try
+        {
+            if (categoria.Ativo) await CategoriaService.InativarAsync(categoria.Id);
+            else await CategoriaService.AtivarAsync(categoria.Id);
+            MostrarMensagem(categoria.Ativo ? "Categoria inativada." : "Categoria ativada.", false);
+            await CarregarAsync();
+        }
+        catch (HttpRequestException) { MostrarMensagem("Não foi possível alterar o status da categoria.", true); }
+    }
+
+    private void FecharForm() { showForm = false; formError = null; }
+    private void MostrarMensagem(string texto, bool erro) { message = texto; messageIsError = erro; }
+    private static string TipoTexto(CategoriaTipo tipo) => tipo == CategoriaTipo.Receita ? "Receita" : "Despesa";
+    private static string TipoClasse(CategoriaTipo tipo) => tipo == CategoriaTipo.Receita ? "category-type-income" : "category-type-expense";
+
+    private sealed class CategoriaForm
+    {
+        [Required(ErrorMessage = "Informe o nome da categoria.")]
+        [MaxLength(100, ErrorMessage = "O nome deve ter no máximo 100 caracteres.")]
+        public string Nome { get; set; } = string.Empty;
+        public CategoriaTipo Tipo { get; set; } = CategoriaTipo.Receita;
+    }
+}

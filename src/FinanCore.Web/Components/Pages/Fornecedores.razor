@@ -1,0 +1,469 @@
+@page "/fornecedores"
+
+@rendermode InteractiveServer
+
+@inject FornecedorService FornecedorService
+@inject AuthService Auth
+
+<PageTitle>Fornecedores | FinanCore</PageTitle>
+
+<section class="module-page clients-page">
+    <div class="module-heading">
+        <div>
+            <span class="dashboard-eyebrow">Cadastros</span>
+            <h1>Fornecedores</h1>
+            <p>Gerencie fornecedores e dados cadastrais da sua operação.</p>
+        </div>
+
+        <button class="module-primary-button" type="button" @onclick="AbrirNovo" disabled="@isLoading">
+            + Novo fornecedor
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="module-message @(messageIsError ? "module-message-error" : "module-message-success")" role="alert">
+            @message
+        </div>
+    }
+
+    <div class="module-card">
+        <div class="module-toolbar">
+            <strong>Fornecedores cadastrados</strong>
+            <span>@fornecedores.Count fornecedor(es)</span>
+        </div>
+
+        <div class="category-table-wrap">
+            <table class="category-table client-table">
+                <thead>
+                    <tr>
+                        <th>Nome / Razão Social</th>
+                        <th>Nome Fantasia</th>
+                        <th>CPF/CNPJ</th>
+                        <th>E-mail</th>
+                        <th>Status</th>
+                        <th class="category-actions-heading">Ações</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (isLoading)
+                    {
+                        <tr>
+                            <td colspan="6" class="category-empty">
+                                Carregando fornecedores...
+                            </td>
+                        </tr>
+                    }
+                    else if (fornecedores.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="category-empty">
+                                Nenhum fornecedor cadastrado.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var fornecedor in fornecedores)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@fornecedor.Nome</strong>
+                                </td>
+
+                                <td>@(fornecedor.NomeFantasia ?? "-")</td>
+                                <td>@(fornecedor.DocumentoFiscal ?? "-")</td>
+                                <td>@(fornecedor.Email ?? "-")</td>
+
+                                <td>
+                                    <span class="category-status @(fornecedor.Ativo ? "category-status-active" : "category-status-inactive")">
+                                        @(fornecedor.Ativo ? "Ativo" : "Inativo")
+                                    </span>
+                                </td>
+
+                                <td class="category-actions">
+                                    <button type="button"
+                                            class="category-action-button"
+                                            @onclick="() => Editar(fornecedor)">
+                                        Editar
+                                    </button>
+
+                                    @if (fornecedor.Ativo)
+                                    {
+                                        <button type="button"
+                                                class="category-action-button category-action-danger"
+                                                @onclick="() => AlterarStatusAsync(fornecedor)">
+                                            Inativar
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="category-action-button category-action-positive"
+                                                @onclick="() => AlterarStatusAsync(fornecedor)">
+                                            Ativar
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@if (showForm)
+{
+    <div class="category-modal-backdrop">
+        <section class="category-modal client-modal" aria-labelledby="supplier-form-title">
+            <div class="category-modal-heading">
+                <div>
+                    <span class="dashboard-eyebrow">Cadastro</span>
+
+                    <h2 id="supplier-form-title">
+                        @(editingId.HasValue ? "Editar fornecedor" : "Novo fornecedor")
+                    </h2>
+                </div>
+
+                <button type="button"
+                        class="category-close-button"
+                        @onclick="FecharForm"
+                        aria-label="Fechar">
+                    ×
+                </button>
+            </div>
+
+            <EditForm Model="form"
+                      OnValidSubmit="SalvarAsync"
+                      class="category-form">
+
+                <DataAnnotationsValidator />
+
+                <div class="client-form-grid">
+                    <div class="category-field client-field-wide">
+                        <label>Nome / Razão Social *</label>
+                        <InputText @bind-Value="form.Nome" maxlength="150" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Nome Fantasia</label>
+                        <InputText @bind-Value="form.NomeFantasia" maxlength="150" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>CPF/CNPJ</label>
+                        <InputText @bind-Value="form.DocumentoFiscal" maxlength="20" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Inscrição Estadual</label>
+                        <InputText @bind-Value="form.InscricaoEstadual" maxlength="30" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Inscrição Municipal</label>
+                        <InputText @bind-Value="form.InscricaoMunicipal" maxlength="30" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>E-mail</label>
+                        <InputText type="email"
+                                   @bind-Value="form.Email"
+                                   maxlength="200" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Telefone</label>
+                        <InputText @bind-Value="form.Telefone" maxlength="20" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Celular</label>
+                        <InputText @bind-Value="form.Celular" maxlength="20" />
+                    </div>
+
+                    <div class="client-form-section-title">
+                        Endereço
+                    </div>
+
+                    <div class="category-field">
+                        <label>CEP</label>
+                        <InputText @bind-Value="form.Cep" maxlength="10" />
+                    </div>
+
+                    <div class="category-field client-field-wide">
+                        <label>Logradouro</label>
+                        <InputText @bind-Value="form.Logradouro" maxlength="200" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Número</label>
+                        <InputText @bind-Value="form.Numero" maxlength="20" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Complemento</label>
+                        <InputText @bind-Value="form.Complemento" maxlength="100" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Bairro</label>
+                        <InputText @bind-Value="form.Bairro" maxlength="100" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>Cidade</label>
+                        <InputText @bind-Value="form.Cidade" maxlength="100" />
+                    </div>
+
+                    <div class="category-field">
+                        <label>UF</label>
+                        <InputText @bind-Value="form.Uf" maxlength="2" />
+                    </div>
+                </div>
+
+                <ValidationMessage For="@(() => form.Nome)" />
+
+                @if (!string.IsNullOrWhiteSpace(formError))
+                {
+                    <div class="module-message module-message-error">
+                        @formError
+                    </div>
+                }
+
+                <div class="category-form-actions">
+                    <button type="button"
+                            class="category-cancel-button"
+                            @onclick="FecharForm">
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="module-primary-button"
+                            disabled="@isSaving">
+                        @(isSaving ? "Salvando..." : "Salvar fornecedor")
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code
+{
+    private readonly List<FornecedorResponse> fornecedores = [];
+    private readonly FornecedorForm form = new();
+
+    private Guid? editingId;
+    private bool showForm, isLoading, isSaving, messageIsError;
+    private string? message, formError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            fornecedores.Clear();
+            fornecedores.AddRange(await FornecedorService.ListarAsync());
+        }
+        catch (Exception)
+        {
+            MostrarMensagem(
+                "Não foi possível carregar os fornecedores.",
+                true
+            );
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AbrirNovo()
+    {
+        editingId = null;
+        form.Limpar();
+        formError = null;
+        showForm = true;
+    }
+
+    private void Editar(FornecedorResponse fornecedor)
+    {
+        editingId = fornecedor.Id;
+        form.From(fornecedor);
+        formError = null;
+        showForm = true;
+    }
+
+    private void FecharForm()
+    {
+        showForm = false;
+        formError = null;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (isSaving)
+            return;
+
+        isSaving = true;
+        formError = null;
+
+        try
+        {
+            if (editingId.HasValue)
+                await FornecedorService.AtualizarAsync(
+                    editingId.Value,
+                    form.ToRequest()
+                );
+            else
+                await FornecedorService.CriarAsync(
+                    form.ToRequest()
+                );
+
+            showForm = false;
+
+            MostrarMensagem(
+                "Fornecedor salvo com sucesso.",
+                false
+            );
+
+            await CarregarAsync();
+        }
+        catch (HttpRequestException)
+        {
+            formError =
+                "Não foi possível salvar. Verifique os dados e se o CPF/CNPJ já está cadastrado.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task AlterarStatusAsync(FornecedorResponse fornecedor)
+    {
+        try
+        {
+            if (fornecedor.Ativo)
+                await FornecedorService.InativarAsync(fornecedor.Id);
+            else
+                await FornecedorService.AtivarAsync(fornecedor.Id);
+
+            MostrarMensagem(
+                fornecedor.Ativo
+                    ? "Fornecedor inativado."
+                    : "Fornecedor ativado.",
+                false
+            );
+
+            await CarregarAsync();
+        }
+        catch (HttpRequestException)
+        {
+            MostrarMensagem(
+                "Não foi possível alterar o status do fornecedor.",
+                true
+            );
+        }
+    }
+
+    private void MostrarMensagem(string texto, bool erro)
+    {
+        message = texto;
+        messageIsError = erro;
+    }
+
+    private sealed class FornecedorForm
+    {
+        [Required(ErrorMessage = "Informe o nome ou razão social.")]
+        [MaxLength(150)]
+        public string Nome { get; set; } = string.Empty;
+
+        public string? NomeFantasia { get; set; }
+        public string? DocumentoFiscal { get; set; }
+        public string? InscricaoEstadual { get; set; }
+        public string? InscricaoMunicipal { get; set; }
+        public string? Email { get; set; }
+        public string? Telefone { get; set; }
+        public string? Celular { get; set; }
+        public string? Cep { get; set; }
+        public string? Logradouro { get; set; }
+        public string? Numero { get; set; }
+        public string? Complemento { get; set; }
+        public string? Bairro { get; set; }
+        public string? Cidade { get; set; }
+        public string? Uf { get; set; }
+
+        public void Limpar()
+        {
+            Nome = string.Empty;
+
+            NomeFantasia =
+                DocumentoFiscal =
+                InscricaoEstadual =
+                InscricaoMunicipal =
+                Email =
+                Telefone =
+                Celular =
+                Cep =
+                Logradouro =
+                Numero =
+                Complemento =
+                Bairro =
+                Cidade =
+                Uf = null;
+        }
+
+        public void From(FornecedorResponse x)
+        {
+            Nome = x.Nome;
+            NomeFantasia = x.NomeFantasia;
+            DocumentoFiscal = x.DocumentoFiscal;
+            InscricaoEstadual = x.InscricaoEstadual;
+            InscricaoMunicipal = x.InscricaoMunicipal;
+            Email = x.Email;
+            Telefone = x.Telefone;
+            Celular = x.Celular;
+            Cep = x.Cep;
+            Logradouro = x.Logradouro;
+            Numero = x.Numero;
+            Complemento = x.Complemento;
+            Bairro = x.Bairro;
+            Cidade = x.Cidade;
+            Uf = x.Uf;
+        }
+
+        public FornecedorRequest ToRequest() =>
+            new(
+                Nome.Trim(),
+                DocumentoFiscal,
+                Email,
+                Telefone,
+                NomeFantasia,
+                InscricaoEstadual,
+                InscricaoMunicipal,
+                Celular,
+                Cep,
+                Logradouro,
+                Numero,
+                Complemento,
+                Bairro,
+                Cidade,
+                Uf
+            );
+    }
+}

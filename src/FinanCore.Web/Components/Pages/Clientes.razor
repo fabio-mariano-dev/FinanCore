@@ -1,0 +1,137 @@
+@page "/clientes"
+@rendermode InteractiveServer
+@inject ClienteService ClienteService
+@inject AuthService Auth
+
+<PageTitle>Clientes | FinanCore</PageTitle>
+
+<section class="module-page clients-page">
+    <div class="module-heading">
+        <div><span class="dashboard-eyebrow">Cadastros</span><h1>Clientes</h1><p>Gerencie clientes e dados cadastrais da sua operação.</p></div>
+        <button class="module-primary-button" type="button" @onclick="AbrirNovo" disabled="@isLoading">+ Novo cliente</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(message)) { <div class="module-message @(messageIsError ? "module-message-error" : "module-message-success")" role="alert">@message</div> }
+    <div class="module-card">
+        <div class="module-toolbar"><strong>Clientes cadastrados</strong><span>@clientes.Count cliente(s)</span></div>
+        <div class="category-table-wrap">
+            <table class="category-table client-table">
+                <thead><tr><th>Nome / Razão Social</th><th>Nome Fantasia</th><th>CPF/CNPJ</th><th>E-mail</th><th>Status</th><th class="category-actions-heading">Ações</th></tr></thead>
+                <tbody>
+                    @if (isLoading) { <tr><td colspan="6" class="category-empty">Carregando clientes...</td></tr> }
+                    else if (clientes.Count == 0) { <tr><td colspan="6" class="category-empty">Nenhum cliente cadastrado.</td></tr> }
+                    else { @foreach (var cliente in clientes) { <tr><td><strong>@cliente.Nome</strong></td><td>@(cliente.NomeFantasia ?? "-")</td><td>@(cliente.DocumentoFiscal ?? "-")</td><td>@(cliente.Email ?? "-")</td><td><span class="category-status @(cliente.Ativo ? "category-status-active" : "category-status-inactive")">@(cliente.Ativo ? "Ativo" : "Inativo")</span></td><td class="category-actions"><button type="button" class="category-action-button" @onclick="() => Editar(cliente)">Editar</button>@if (cliente.Ativo) { <button type="button" class="category-action-button category-action-danger" @onclick="() => AlterarStatusAsync(cliente)">Inativar</button> } else { <button type="button" class="category-action-button category-action-positive" @onclick="() => AlterarStatusAsync(cliente)">Ativar</button> }</td></tr> } }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@if (showForm)
+{
+    <div class="category-modal-backdrop">
+        <section class="category-modal client-modal" aria-labelledby="client-form-title">
+            <div class="category-modal-heading"><div><span class="dashboard-eyebrow">Cadastro</span><h2 id="client-form-title">@(editingId.HasValue ? "Editar cliente" : "Novo cliente")</h2></div><button type="button" class="category-close-button" @onclick="FecharForm" aria-label="Fechar">×</button></div>
+            <EditForm Model="form" OnValidSubmit="SalvarAsync" class="category-form">
+                <DataAnnotationsValidator />
+                <div class="client-form-grid">
+                    <div class="category-field client-field-wide"><label for="client-name">Nome / Razão Social *</label><InputText id="client-name" @bind-Value="form.Nome" maxlength="150" /></div>
+                    <div class="category-field"><label for="client-trade">Nome Fantasia</label><InputText id="client-trade" @bind-Value="form.NomeFantasia" maxlength="150" /></div>
+                    <div class="category-field"><label for="client-document">CPF/CNPJ</label><InputText id="client-document" @bind-Value="form.DocumentoFiscal" maxlength="20" /></div>
+                    <div class="category-field"><label for="client-state-registration">Inscrição Estadual</label><InputText id="client-state-registration" @bind-Value="form.InscricaoEstadual" maxlength="30" /></div>
+                    <div class="category-field"><label for="client-city-registration">Inscrição Municipal</label><InputText id="client-city-registration" @bind-Value="form.InscricaoMunicipal" maxlength="30" /></div>
+                    <div class="category-field"><label for="client-email">E-mail</label><InputText id="client-email" type="email" @bind-Value="form.Email" maxlength="200" /></div>
+                    <div class="category-field"><label for="client-phone">Telefone</label><InputText id="client-phone" @bind-Value="form.Telefone" maxlength="20" /></div>
+                    <div class="category-field"><label for="client-mobile">Celular</label><InputText id="client-mobile" @bind-Value="form.Celular" maxlength="20" /></div>
+                    <div class="client-form-section-title">Endereço</div>
+                    <div class="category-field"><label for="client-cep">CEP</label><InputText id="client-cep" @bind-Value="form.Cep" maxlength="10" /></div>
+                    <div class="category-field client-field-wide"><label for="client-street">Logradouro</label><InputText id="client-street" @bind-Value="form.Logradouro" maxlength="200" /></div>
+                    <div class="category-field"><label for="client-number">Número</label><InputText id="client-number" @bind-Value="form.Numero" maxlength="20" /></div>
+                    <div class="category-field"><label for="client-complement">Complemento</label><InputText id="client-complement" @bind-Value="form.Complemento" maxlength="100" /></div>
+                    <div class="category-field"><label for="client-neighborhood">Bairro</label><InputText id="client-neighborhood" @bind-Value="form.Bairro" maxlength="100" /></div>
+                    <div class="category-field"><label for="client-city">Cidade</label><InputText id="client-city" @bind-Value="form.Cidade" maxlength="100" /></div>
+                    <div class="category-field"><label for="client-uf">UF</label><InputText id="client-uf" @bind-Value="form.Uf" maxlength="2" /></div>
+                </div>
+                <ValidationMessage For="@(() => form.Nome)" />
+                @if (!string.IsNullOrWhiteSpace(formError)) { <div class="module-message module-message-error">@formError</div> }
+                <div class="category-form-actions"><button type="button" class="category-cancel-button" @onclick="FecharForm">Cancelar</button><button type="submit" class="module-primary-button" disabled="@isSaving">@(isSaving ? "Salvando..." : "Salvar cliente")</button></div>
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly List<ClienteResponse> clientes = [];
+    private readonly ClienteForm form = new();
+    private Guid? editingId;
+    private bool showForm, isLoading, isSaving, messageIsError;
+    private string? message, formError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Auth.RestoreAsync();
+        if (string.IsNullOrWhiteSpace(Auth.AccessToken)) return;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        isLoading = true;
+        try { clientes.Clear(); clientes.AddRange(await ClienteService.ListarAsync()); }
+        catch (Exception) { MostrarMensagem("Não foi possível carregar os clientes.", true); }
+        finally { isLoading = false; }
+    }
+
+    private void AbrirNovo() { editingId = null; LimparForm(); formError = null; showForm = true; }
+    private void Editar(ClienteResponse cliente) { editingId = cliente.Id; form.From(cliente); formError = null; showForm = true; }
+    private void FecharForm() { showForm = false; formError = null; }
+
+    private async Task SalvarAsync()
+    {
+        if (isSaving) return;
+        isSaving = true; formError = null;
+        try
+        {
+            var request = form.ToRequest();
+            if (editingId.HasValue) await ClienteService.AtualizarAsync(editingId.Value, request);
+            else await ClienteService.CriarAsync(request);
+            showForm = false; MostrarMensagem("Cliente salvo com sucesso.", false); await CarregarAsync();
+        }
+        catch (HttpRequestException) { formError = "Não foi possível salvar. Verifique os dados e se o CPF/CNPJ já está cadastrado."; }
+        finally { isSaving = false; }
+    }
+
+    private async Task AlterarStatusAsync(ClienteResponse cliente)
+    {
+        try { if (cliente.Ativo) await ClienteService.InativarAsync(cliente.Id); else await ClienteService.AtivarAsync(cliente.Id); MostrarMensagem(cliente.Ativo ? "Cliente inativado." : "Cliente ativado.", false); await CarregarAsync(); }
+        catch (HttpRequestException) { MostrarMensagem("Não foi possível alterar o status do cliente.", true); }
+    }
+
+    private void LimparForm() { form.Nome = string.Empty; form.NomeFantasia = null; form.DocumentoFiscal = null; form.InscricaoEstadual = null; form.InscricaoMunicipal = null; form.Email = null; form.Telefone = null; form.Celular = null; form.Cep = null; form.Logradouro = null; form.Numero = null; form.Complemento = null; form.Bairro = null; form.Cidade = null; form.Uf = null; }
+    private void MostrarMensagem(string texto, bool erro) { message = texto; messageIsError = erro; }
+
+    private sealed class ClienteForm
+    {
+        [Required(ErrorMessage = "Informe o nome ou razão social.")]
+        [MaxLength(150, ErrorMessage = "O nome deve ter no máximo 150 caracteres.")]
+        public string Nome { get; set; } = string.Empty;
+        public string? NomeFantasia { get; set; }
+        public string? DocumentoFiscal { get; set; }
+        public string? InscricaoEstadual { get; set; }
+        public string? InscricaoMunicipal { get; set; }
+        public string? Email { get; set; }
+        public string? Telefone { get; set; }
+        public string? Celular { get; set; }
+        public string? Cep { get; set; }
+        public string? Logradouro { get; set; }
+        public string? Numero { get; set; }
+        public string? Complemento { get; set; }
+        public string? Bairro { get; set; }
+        public string? Cidade { get; set; }
+        public string? Uf { get; set; }
+
+        public void From(ClienteResponse cliente) { Nome = cliente.Nome; NomeFantasia = cliente.NomeFantasia; DocumentoFiscal = cliente.DocumentoFiscal; InscricaoEstadual = cliente.InscricaoEstadual; InscricaoMunicipal = cliente.InscricaoMunicipal; Email = cliente.Email; Telefone = cliente.Telefone; Celular = cliente.Celular; Cep = cliente.Cep; Logradouro = cliente.Logradouro; Numero = cliente.Numero; Complemento = cliente.Complemento; Bairro = cliente.Bairro; Cidade = cliente.Cidade; Uf = cliente.Uf; }
+        public ClienteRequest ToRequest() => new(Nome.Trim(), DocumentoFiscal, Email, Telefone, NomeFantasia, InscricaoEstadual, InscricaoMunicipal, Celular, Cep, Logradouro, Numero, Complemento, Bairro, Cidade, Uf);
+    }
+}
